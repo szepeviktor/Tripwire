@@ -30,6 +30,50 @@ class Tripwire
      */
     protected $messages_buffer = array();
 
+
+    /**
+     * a place to keep strings
+     * regarding the files being processed
+     * before outputting for user
+     * this is for display, not function
+     * 
+     * @var array
+     */
+    protected $files_buffer = array();
+
+
+    /**
+     * arrays to house comparison results
+     * @var array
+     */
+    protected $files_new = array();
+    protected $files_modified = array();
+    protected $files_deleted = array();
+
+
+    /**
+     * flag to track whether there are differences between 
+     * this run and the last run
+     * @var boolean
+     */
+    protected $there_were_differences = false;
+
+
+    /**
+     * a place to store md5s of files
+     * @var array
+     */
+    protected $listing_now = array();
+    protected $listing_last = array();
+
+
+    /**
+     * html for the report
+     * built out in method: prepare_report()
+     * @var string
+     */
+    protected $report = '';
+
     public function __construct()
     {
         $this->load_settings('tripwire_config.ini');
@@ -39,8 +83,15 @@ class Tripwire
 
         // start checking the supplied dirs
         $this->check_paths();
+        
+        $this->run_comparisons();
+        
+        $this->save_md5_file();
 
-        var_dump($this->messages_buffer);
+        $this->prepare_report();
+
+        // var_dump($this->messages_buffer);
+        // var_dump($this->files_buffer);
     }
 
 
@@ -58,6 +109,10 @@ class Tripwire
     protected function check_paths()
     {
         $paths = $this->config['paths'];
+
+        // start a clean copy of the listing
+        // this is updated in check_path()
+        $this->listing_now = array();
 
         if (!is_array($paths))
         {
@@ -90,11 +145,7 @@ class Tripwire
                 continue;
             }
 
-            $this->add_message("Checking directory '{$path}'");
-
             $this->check_path($path);
-
-            return $temp;
         }
     }
 
@@ -104,15 +155,154 @@ class Tripwire
      * this is a recursive function
      *
      * @since   2014-03-17
+     * @author  Luke Stevenson <www.lucanos.com>
      * @author  Daniel.Walker <polyesterhat@gmail.com>
      * @param   string     $path the path to the directory
      * @return  void
      */
     protected function check_path($path = '')
     {
+        $this->add_message("Checking directory '{$path}'");
 
+        $d = dir($path);
+
+        // Loop through the files
+        while (false !== ($entry = $d->read()))
+        {
+            // Full Entry (including Directory)
+            $entry_full = $path . '/' . $entry;
+
+            // Symbolic Link - Excluded
+            if (is_link($entry))
+            {
+                // add symlink to buffer
+                $this->add_file($path, $entry . ' <- symlink');
+                continue;
+            }
+
+            // determine whether this file should be excluded 
+            // based on file name or extension
+            $exclude_file = in_array($entry , $this->config['files']) OR in_array($entry_full , $this->config['files']);
+
+            $exclude_extension = in_array(pathinfo($entry , PATHINFO_EXTENSION) , $this->config['extensions']);
+
+            // Excluded File/Folder
+            if ($exclude_file OR $exclude_extension)
+            {
+                $this->add_file($path, $entry . ' <- excluded');
+                continue;
+            }
+
+            if (is_dir($entry_full))
+            {
+                // label this file for the output listing
+                $this->add_file($path, $entry . ' <- directory');
+
+                // Recurse
+                $this->check_path($entry_full);
+            }
+            else
+            {
+                // a file
+                // check date
+                // if different date check md5
+                $md5 = @md5_file( $entry_full );
+                $this->add_file($path, $entry);
+
+                if (!$md5)
+                {
+                    $this->add_message("Could not md5: {$entry_full}");
+                    file_put_contents($this->config['unreadable_list'] ,  "{$entry_full} - Unreadable\n" , FILE_APPEND);
+                }
+                else
+                {
+                    $this->listing_now[$entry_full] = $md5;
+                }
+            }
+        }
+
+        $d->close();
     }
 
+
+    /**
+     * opens the file used last time and
+     * compares line by line with the latest results from check paths
+     *
+     * @since   2014-03-18
+     * @author  Luke Stevenson <www.lucanos.com>
+     * @author  Daniel.Walker <polyesterhat@gmail.com>
+     * @todo    make the comparisons faster
+     * @return  void
+     */
+    protected function run_comparisons()
+    {
+        $this->listing_last = array();
+
+        if (file_exists($this->config['md5_file']))
+        {
+            $temp = file_get_contents($this->config['md5_file']);
+
+            $this->listing_last = (array)json_decode($temp);
+        }
+
+        // kept Luke's old logic here
+        // there are probably faster ways to do this
+        // Perform Comparisons
+        $keys_now = array_keys($this->listing_now);
+        $keys_last = array_keys($this->listing_last);
+
+        // New Files = Files in $now, but not in $last
+        $this->files_new = array_diff($keys_now, $keys_last);
+
+        // Deleted Files = Files in $last, but not in $now
+        $this->files_deleted = array_diff($keys_last, $keys_now);
+
+        // Changed Files = Files in $last and $now, but with Different MD5 Hashes
+        $this->files_modified = array_diff_assoc(
+            array_intersect_key($this->listing_last, $this->listing_now),
+            array_intersect_key($this->listing_now, $this->listing_last)
+        );
+
+        $this->there_were_differences = count($this->files_new) OR count($this->files_modified) OR count($this->files_deleted);
+    }
+
+
+    /**
+     * simply save the new listing into the file
+     *
+     * @since   2014-03-18
+     * @author  Daniel.Walker <polyesterhat@gmail.com>
+     * @return  void
+     */
+    protected function save_md5_file()
+    {
+        // write the file if there wasn't already a file
+        // or there were differences
+        if (empty($this->listing_last) OR $this->there_were_differences)
+        {
+            // json encode is slightly faster than serialize since it 
+            // doesn't have to insert string lengths
+            file_put_contents($this->config['md5_file'], json_encode($this->listing_now));
+        }
+    }
+
+
+    /**
+     * generate all html to send to the user
+     * regarding the findings of the tripewire run
+     * this will include new files, modifications, deletions
+     * and the time
+     *
+     * @since   2014-03-18
+     * @author  Daniel.Walker <polyesterhat@gmail.com>
+     * @author  Luke Stevenson <www.lucanos.com>
+     * @return  void
+     */
+    protected function prepare_report()
+    {
+
+    }
 
     /**
      * to maintain a buffer of messages
@@ -127,6 +317,27 @@ class Tripwire
     protected function add_message($message)
     {
         array_push($this->messages_buffer, $message);
+    }
+
+
+    /**
+     * to keep a running list of
+     * files
+     *
+     * @since  2014-03-18
+     * @author  Daniel.Walker <polyesterhat@gmail.com>
+     * @param   string $path the path to use
+     * @param   string $file a new file
+     * @return  void
+     */
+    protected function add_file($path ='', $file = '')
+    {
+        if (!array_key_exists($path, $this->files_buffer))
+        {
+            $this->files_buffer[$path] = array();
+        }
+
+        array_push($this->files_buffer[$path], $file);
     }
 
 
