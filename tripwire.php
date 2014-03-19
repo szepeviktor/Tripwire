@@ -56,7 +56,7 @@ class Tripwire
      * this run and the last run
      * @var boolean
      */
-    protected $there_were_differences = false;
+    protected $there_were_differences = FALSE;
 
 
     /**
@@ -167,7 +167,7 @@ class Tripwire
         $d = dir($path);
 
         // Loop through the files
-        while (false !== ($entry = $d->read()))
+        while (FALSE !== ($entry = $d->read()))
         {
             // Full Entry (including Directory)
             $entry_full = $path . '/' . $entry;
@@ -301,8 +301,79 @@ class Tripwire
      */
     protected function prepare_report()
     {
+        // If there was a Filelist from the last run to 
+        // compare against, and changes have occurred then,
+        // Prepare Report
+        if (count($this->listing_last) AND $this->there_were_differences)
+        {
+            // Changes Detected
 
+            // Prepare the placeholder details
+            $body_replacements = array(
+                '[AN]' => count( $this->files_new ) ,
+                '[AF]' => ( count( $this->files_new ) ? implode( "<br/>" , $this->files_new ) : 'No Files' ) ,
+                '[MN]' => count( $this->files_modified ) ,
+                '[MF]' => ( count( $this->files_modified ) ? implode( "<br/>" , array_keys( $this->files_modified ) ) : 'No Files' ) ,
+                '[DN]' => count( $this->files_deleted ) ,
+                '[DF]' => ( count( $this->files_deleted ) ? implode( "<br/>" , $this->files_deleted ) : 'No Files' ) ,
+            );
+
+            $title = str_replace( '[X]' , ( count( $this->files_new )+count( $this->files_deleted )+count( $this->files_modified ) ) , $this->config['title'] );
+
+            // Send Email Flag
+            $sendEmail = TRUE;
+        }
+        elseif (empty($this->listing_last))
+        {
+            // Assume no changes
+            // Prepare the placeholder details
+            $body_replacements = array(
+                '[AN]' => 0 ,
+                '[AF]' => 'No Files' ,
+                '[MN]' => 0 ,
+                '[MF]' => 'No Files' ,
+                '[DN]' => 0 ,
+                '[DF]' => 'No Files' ,
+            );
+
+            $title = str_replace( '[X]' , 0 , $this->config['title'] );
+
+            // Send Email Flag
+            $sendEmail = FALSE;
+        }
+        else
+        {
+            // First Run
+
+            // Prepare the placeholder details
+            $body_replacements = array(
+                '[AN]' => count( $this->files_new ) ,
+                '[AF]' => ( count( $this->files_new ) ? implode( "<br/>" , $this->files_new ) : 'No Files' ) ,
+                '[MN]' => 0 ,
+                '[MF]' => 'No Files' ,
+                '[DN]' => 0 ,
+                '[DF]' => 'No Files' ,
+            );
+
+            $title = str_replace( '[X]' , count( $this->files_new ) , $this->config['title'] );
+
+            // Adjust the Template
+            $this->config['body'] = "<p>Tripwire has made it's first pass of your files.</p>".$this->config['body'];
+
+            // Send Email Flag
+            $sendEmail = TRUE;
+        }
+
+        // Perform the Placeholder Substitutions within the Body
+        $body = str_replace(
+            array_keys($body_replacements),
+            $body_replacements,
+            $this->config['body']
+        );
+
+        $this->email_user($title, $body);
     }
+
 
     /**
      * to maintain a buffer of messages
@@ -347,19 +418,24 @@ class Tripwire
      *
      * @since   2014-03-17
      * @author  Daniel.Walker <polyesterhat@gmail.com>
-     * @param   string     $message the body of the email
+     * @param   string     $title of the email
+     * @param   string     $body of the email
      * @return  boolean
      */
-    protected function email_user($message)
+    protected function email_user($title, $body)
     {
         // Prepare the recipients
-        $to = implode( ', ' , $this->config['email']['to'] );
+        $to = implode(', ' , $this->config['to']);
+
+        $headers  = 'MIME-Version: 1.0' . "\r\n";
+        $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
 
         // Send it
         $result = mail(
-            $this->config['email']['to'],
-            $this->config['title'],
-            $message
+            $to,
+            $title,
+            $body,
+            $headers
         );
 
         return $result;
