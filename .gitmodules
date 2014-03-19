@@ -1,0 +1,6 @@
+[submodule "phpmailer"]
+	path = include/phpmailer
+	url = https://github.com/PHPMailer/PHPMailer.git
+[submodule "twig"]
+	path = include/twig
+	url = git://github.com/fabpot/Twig.git
