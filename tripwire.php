@@ -17,6 +17,9 @@
  *    Also, be sure to add your email address to the Configuration Settings to ensure
  *    that you recieve the notifications.
  *
+ * For the email template, I'm using:
+ * leemunroe.github.io/html-email-template/email.html
+ * Twig is used to compile the template
  */
 
 class Tripwire
@@ -251,7 +254,6 @@ class Tripwire
         // Perform Comparisons
         $keys_now = array_keys($this->listing_now);
         $keys_last = array_keys($this->listing_last);
-
         // New Files = Files in $now, but not in $last
         $this->files_new = array_diff($keys_now, $keys_last);
 
@@ -290,7 +292,7 @@ class Tripwire
 
     /**
      * generate all html to send to the user
-     * regarding the findings of the tripewire run
+     * regarding the findings of the tripwire run
      * this will include new files, modifications, deletions
      * and the time
      *
@@ -301,77 +303,65 @@ class Tripwire
      */
     protected function prepare_report()
     {
+        $vars = array(
+            'AF' => $this->files_new,
+            'MF' => $this->files_modified,
+            'DF' => $this->files_deleted,
+            'total' => 0,
+            'title' => 'Tripwire - no changes',
+            'heading' => 'Tripwire has not detected any changes',
+        );
+
+        // make email subject
+        $subject = str_replace( '{{X}}' , count( $this->files_new ) , $this->config['subject'] );
+
         // If there was a Filelist from the last run to 
         // compare against, and changes have occurred then,
         // Prepare Report
-        if (count($this->listing_last) AND $this->there_were_differences)
+        if (empty($this->listing_last))
         {
+            // First Run
+            $this->add_message('There was no previous listings - this was a first run.');
+
+            $vars['total'] = count($this->files_new);
+            $vars['title'] = 'Tripwire - First Run';
+            $vars['heading'] = 'Tripwire has made it\'s first pass of your files';
+        }
+        elseif ($this->there_were_differences)
+        {
+            $this->add_message('There was a previous listing and there are differences.');
+
             // Changes Detected
 
-            // Prepare the placeholder details
-            $body_replacements = array(
-                '[AN]' => count( $this->files_new ) ,
-                '[AF]' => ( count( $this->files_new ) ? implode( "<br/>" , $this->files_new ) : 'No Files' ) ,
-                '[MN]' => count( $this->files_modified ) ,
-                '[MF]' => ( count( $this->files_modified ) ? implode( "<br/>" , array_keys( $this->files_modified ) ) : 'No Files' ) ,
-                '[DN]' => count( $this->files_deleted ) ,
-                '[DF]' => ( count( $this->files_deleted ) ? implode( "<br/>" , $this->files_deleted ) : 'No Files' ) ,
-            );
-
-            $title = str_replace( '[X]' , ( count( $this->files_new )+count( $this->files_deleted )+count( $this->files_modified ) ) , $this->config['title'] );
-
-            // Send Email Flag
-            $sendEmail = TRUE;
-        }
-        elseif (empty($this->listing_last))
-        {
-            // Assume no changes
-            // Prepare the placeholder details
-            $body_replacements = array(
-                '[AN]' => 0 ,
-                '[AF]' => 'No Files' ,
-                '[MN]' => 0 ,
-                '[MF]' => 'No Files' ,
-                '[DN]' => 0 ,
-                '[DF]' => 'No Files' ,
-            );
-
-            $title = str_replace( '[X]' , 0 , $this->config['title'] );
-
-            // Send Email Flag
-            $sendEmail = FALSE;
+            $vars['total'] = count($this->files_new) + count($this->files_deleted) + count($this->files_modified);
+            $vars['title'] = 'Tripwire - Changes Detected';
+            $vars['heading'] = 'Tripwire has detected a number of changes:';
         }
         else
         {
-            // First Run
+            $this->add_message('There were no differences.');
 
-            // Prepare the placeholder details
-            $body_replacements = array(
-                '[AN]' => count( $this->files_new ) ,
-                '[AF]' => ( count( $this->files_new ) ? implode( "<br/>" , $this->files_new ) : 'No Files' ) ,
-                '[MN]' => 0 ,
-                '[MF]' => 'No Files' ,
-                '[DN]' => 0 ,
-                '[DF]' => 'No Files' ,
-            );
-
-            $title = str_replace( '[X]' , count( $this->files_new ) , $this->config['title'] );
-
-            // Adjust the Template
-            $this->config['body'] = "<p>Tripwire has made it's first pass of your files.</p>".$this->config['body'];
-
-            // Send Email Flag
-            $sendEmail = TRUE;
+            // nothing to do...
         }
 
-        // Perform the Placeholder Substitutions within the Body
-        $body = str_replace(
-            array_keys($body_replacements),
-            $body_replacements,
-            $this->config['body']
-        );
+        // Compile the email template with Twig
+        require_once 'include/twig/lib/Twig/Autoloader.php';
+        Twig_Autoloader::register();
 
-        $this->email_user($title, $body);
+        $loader = new Twig_Loader_Filesystem('views');
+        $twig = new Twig_Environment($loader);
+
+        $template = $twig->loadTemplate('email_template.html');
+
+        $body = $template->render($vars);
+
+        $this->email_user($subject, $body);
+
+        if ($this->DEBUG)
+        {
+            echo $body;
+        }
+
     }
 
 
@@ -418,25 +408,26 @@ class Tripwire
      *
      * @since   2014-03-17
      * @author  Daniel.Walker <polyesterhat@gmail.com>
-     * @param   string     $title of the email
+     * @param   string     $subject of the email
      * @param   string     $body of the email
      * @return  boolean
      */
-    protected function email_user($title, $body)
+    protected function email_user($subject, $body)
     {
-        // Prepare the recipients
-        $to = implode(', ' , $this->config['to']);
+        $result = FALSE;
 
-        $headers  = 'MIME-Version: 1.0' . "\r\n";
-        $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
+        if ($this->config['send_email'])
+        {
+            // Prepare the recipients
+            $to = implode(', ' , $this->config['to']);
 
-        // Send it
-        $result = mail(
-            $to,
-            $title,
-            $body,
-            $headers
-        );
+            // Send it
+            $result = mail(
+                $to,
+                $subject,
+                $body
+            );
+        }
 
         return $result;
     }
