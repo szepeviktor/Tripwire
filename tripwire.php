@@ -418,6 +418,8 @@ class Tripwire
 
         if ($this->config['send_email'])
         {
+            $headers = "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Disposition: inline";
+            
             // Prepare the recipients
             $to = implode(', ' , $this->config['to']);
 
@@ -425,7 +427,8 @@ class Tripwire
             $result = mail(
                 $to,
                 $subject,
-                $body
+                $body,
+                $headers
             );
         }
 
