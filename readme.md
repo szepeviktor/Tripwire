@@ -24,6 +24,8 @@ git clone https://github.com/polyesterhat/Tripwire.git
 
 cd Tripwire
 
+git submodule init && git submodule update
+
 cp tripwire_config.sample.ini tripwire_config.ini
 ```
 
