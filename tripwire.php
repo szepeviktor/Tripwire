@@ -8,7 +8,7 @@
  *  This is a PHP script which will scan files within a directory (including
  *    sub-directories), calculate their MD5 Hashes and then compare them against
  *    a log of the results from the previous execution to determine any files
- *    which have been added, deleted or modified during that period.
+ *    which have been added, deleted || modified during that period.
  *
  *  Within the Configuration Settings, exclusions can be set for any files/folders
  *    which should not be checked.
@@ -28,7 +28,7 @@ class Tripwire
 
     /**
      * a place to keep the messages before they all get echoed
-     * 
+     *
      * @var array
      */
     protected $messages_buffer = array();
@@ -39,7 +39,7 @@ class Tripwire
      * regarding the files being processed
      * before outputting for user
      * this is for display, not function
-     * 
+     *
      * @var array
      */
     protected $files_buffer = array();
@@ -86,14 +86,14 @@ class Tripwire
 
         // start checking the supplied dirs
         $this->check_paths();
-        
+
         $this->run_comparisons();
-        
+
         $this->save_md5_file();
 
         $this->prepare_report();
 
-        // var_dump($this->messages_buffer);
+        // @FIXME these two are also missing: var_dump($this->messages_buffer);
         // var_dump($this->files_buffer);
     }
 
@@ -101,10 +101,10 @@ class Tripwire
     /**
      * this is the real meat and potatoes of Tripwire
      * 1. first get paths from config file
-     * 2. traverse them and check for differences in the 
+     * 2. traverse them and check for differences in the
      *    date modified to what we have on file
      * 3.
-     * 
+     *
      * @since   2014-03-17
      * @author  Daniel.Walker <polyesterhat@gmail.com>
      * @return  void
@@ -183,14 +183,14 @@ class Tripwire
                 continue;
             }
 
-            // determine whether this file should be excluded 
-            // based on file name or extension
-            $exclude_file = in_array($entry , $this->config['files']) OR in_array($entry_full , $this->config['files']);
+            // determine whether this file should be excluded
+            // based on file name || extension
+            $exclude_file = in_array($entry , $this->config['files']) || in_array($entry_full , $this->config['files']);
 
             $exclude_extension = in_array(pathinfo($entry , PATHINFO_EXTENSION) , $this->config['extensions']);
 
             // Excluded File/Folder
-            if ($exclude_file OR $exclude_extension)
+            if ($exclude_file || $exclude_extension)
             {
                 $this->add_file($path, $entry . ' <- excluded');
                 continue;
@@ -262,11 +262,11 @@ class Tripwire
 
         // Changed Files = Files in $last and $now, but with Different MD5 Hashes
         $this->files_modified = array_diff_assoc(
-            array_intersect_key($this->listing_last, $this->listing_now),
-            array_intersect_key($this->listing_now, $this->listing_last)
+            array_flip(array_intersect_key($this->listing_last, $this->listing_now)),
+            array_flip(array_intersect_key($this->listing_now, $this->listing_last))
         );
 
-        $this->there_were_differences = count($this->files_new) OR count($this->files_modified) OR count($this->files_deleted);
+        $this->there_were_differences = count($this->files_new) || count($this->files_modified) || count($this->files_deleted);
     }
 
 
@@ -280,8 +280,8 @@ class Tripwire
     protected function save_md5_file()
     {
         // write the file if there wasn't already a file
-        // or there were differences
-        if (empty($this->listing_last) OR $this->there_were_differences)
+        // || there were differences
+        if (empty($this->listing_last) || $this->there_were_differences)
         {
             // json encode is slightly faster than serialize since it 
             // doesn't have to insert string lengths
@@ -312,10 +312,7 @@ class Tripwire
             'heading' => 'Tripwire has not detected any changes',
         );
 
-        // make email subject
-        $subject = str_replace( '{{X}}' , count( $this->files_new ) , $this->config['subject'] );
-
-        // If there was a Filelist from the last run to 
+        // If there was a Filelist from the last run to
         // compare against, and changes have occurred then,
         // Prepare Report
         if (empty($this->listing_last))
@@ -345,11 +342,14 @@ class Tripwire
             return;
         }
 
+        // make email subject
+        $subject = str_replace( '{{X}}' , $vars['total'] , $this->config['subject'] );
+
         // Compile the email template with Twig
         require_once 'include/twig/lib/Twig/Autoloader.php';
         Twig_Autoloader::register();
 
-        $loader = new Twig_Loader_Filesystem(dirname(__FILE__) . 'views');
+        $loader = new Twig_Loader_Filesystem( dirname(__FILE__) . '/views' );
         $twig = new Twig_Environment($loader);
 
         $template = $twig->loadTemplate('email_template.html');
@@ -368,7 +368,7 @@ class Tripwire
 
     /**
      * to maintain a buffer of messages
-     * this method will simply push a new string onto 
+     * this method will simply push a new string onto
      * the messages array
      *
      * @since   2014-03-17
@@ -383,8 +383,7 @@ class Tripwire
 
 
     /**
-     * to keep a running list of
-     * files
+     * to keep a running list of files
      *
      * @since  2014-03-18
      * @author  Daniel.Walker <polyesterhat@gmail.com>
@@ -420,10 +419,11 @@ class Tripwire
         if ($this->config['send_email'])
         {
             $headers = "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Disposition: inline";
-            
+
             // Prepare the recipients
             $to = implode(', ' , $this->config['to']);
 
+// @FIXME phpmailer is not yet used, only HTML email
             // Send it
             $result = mail(
                 $to,
@@ -453,5 +453,5 @@ class Tripwire
 }
 
 // Start the Instance
-$t = new Tripwire();
+new Tripwire();
 
