@@ -342,6 +342,7 @@ class Tripwire
             $this->add_message('There were no differences.');
 
             // nothing to do...
+            return;
         }
 
         // Compile the email template with Twig
