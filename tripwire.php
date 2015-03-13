@@ -296,7 +296,7 @@ class Tripwire
 
             // json encode is slightly faster than serialize since it 
             // doesn't have to insert string lengths
-            //file_put_contents($this->config['md5_file'], json_encode($this->listing_now));
+            file_put_contents($this->config['md5_file'], json_encode($this->listing_now));
         }
     }
 
