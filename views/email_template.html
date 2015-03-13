@@ -211,7 +211,7 @@ ul li, ol li {
                             <br />
                             {% if MF %}
                                 <ul>
-                                    {% for file in MF %}
+                                    {% for file,hash in MF %}
                                         <li>
                                         {{file}}
                                         </li>

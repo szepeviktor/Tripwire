@@ -267,11 +267,11 @@ class Tripwire
         $this->there_were_differences = (count($this->files_new) OR count($this->files_modified) OR count($this->files_deleted));
 
         if($this->DEBUG) {
-            echo 'number of files_new: ' . count($this->files_new) . "\n";
-            echo 'number of files_modified: ' . count($this->files_modified) . "\n";
-            echo 'number of files_delete: ' . count($this->files_deleted). "\n";
+            echo 'Number of files_new: ' . count($this->files_new) . "\n";
+            echo 'Number of files_modified: ' . count($this->files_modified) . "\n";
+            echo 'Number of files_delete: ' . count($this->files_deleted). "\n";
 
-            echo ($this->there_were_differences ? 'There were Differences' : 'There were not any differences') . "\n";
+            echo ($this->there_were_differences ? 'There were differences' : 'There were not any differences') . "\n";
             print_r($this->files_modified);
         }
     }
@@ -296,7 +296,7 @@ class Tripwire
 
             // json encode is slightly faster than serialize since it 
             // doesn't have to insert string lengths
-            file_put_contents($this->config['md5_file'], json_encode($this->listing_now));
+            //file_put_contents($this->config['md5_file'], json_encode($this->listing_now));
         }
     }
 
@@ -360,7 +360,7 @@ class Tripwire
         require_once 'include/twig/lib/Twig/Autoloader.php';
         Twig_Autoloader::register();
 
-        $loader = new Twig_Loader_Filesystem(dirname(__FILE__) . 'views');
+        $loader = new Twig_Loader_Filesystem('views');
         $twig = new Twig_Environment($loader);
 
         $template = $twig->loadTemplate('email_template.html');
@@ -372,6 +372,10 @@ class Tripwire
         if ($this->DEBUG)
         {
             echo $body;
+            echo "\n\n";
+            echo "Message Buffer:";
+            echo "\n\n";
+            print_r($this->messages_buffer);
         }
 
     }
