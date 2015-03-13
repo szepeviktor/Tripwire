@@ -86,15 +86,12 @@ class Tripwire
 
         // start checking the supplied dirs
         $this->check_paths();
-        
+
         $this->run_comparisons();
-        
+
         $this->save_md5_file();
 
         $this->prepare_report();
-
-        // var_dump($this->messages_buffer);
-        // var_dump($this->files_buffer);
     }
 
 
@@ -266,7 +263,17 @@ class Tripwire
             array_intersect_key($this->listing_now, $this->listing_last)
         );
 
-        $this->there_were_differences = count($this->files_new) OR count($this->files_modified) OR count($this->files_deleted);
+        // this line must have parenthesis
+        $this->there_were_differences = (count($this->files_new) OR count($this->files_modified) OR count($this->files_deleted));
+
+        if($this->DEBUG) {
+            echo 'number of files_new: ' . count($this->files_new) . "\n";
+            echo 'number of files_modified: ' . count($this->files_modified) . "\n";
+            echo 'number of files_delete: ' . count($this->files_deleted). "\n";
+
+            echo ($this->there_were_differences ? 'There were Differences' : 'There were not any differences') . "\n";
+            print_r($this->files_modified);
+        }
     }
 
 
@@ -283,6 +290,10 @@ class Tripwire
         // or there were differences
         if (empty($this->listing_last) OR $this->there_were_differences)
         {
+            if ($this->DEBUG) {
+                echo "Saving MD5 file \n";
+            }
+
             // json encode is slightly faster than serialize since it 
             // doesn't have to insert string lengths
             file_put_contents($this->config['md5_file'], json_encode($this->listing_now));
@@ -321,7 +332,7 @@ class Tripwire
         if (empty($this->listing_last))
         {
             // First Run
-            $this->add_message('There was no previous listings - this was a first run.');
+            $this->add_message('There were no previous listings - this was a first run.');
 
             $vars['total'] = count($this->files_new);
             $vars['title'] = 'Tripwire - First Run';
@@ -329,7 +340,7 @@ class Tripwire
         }
         elseif ($this->there_were_differences)
         {
-            $this->add_message('There was a previous listing and there are differences.');
+            $this->add_message('There were previous listings and there are differences.');
 
             // Changes Detected
 
@@ -453,5 +464,5 @@ class Tripwire
 }
 
 // Start the Instance
-$t = new Tripwire();
+new Tripwire();
 
