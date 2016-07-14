@@ -15,14 +15,14 @@ Malicious Uploads. This script will tell you *anytime* a file is added/removed/m
 
 Download this repo as a zip and install on your server, or use a `git pull`.
 
-### In terminal run:
+### In terminal, run:
 
 ```bash
 cd ~
 
-git clone https://github.com/polyesterhat/Tripwire.git
+git clone https://github.com/polyesterhat/Tripwire.git tripwire
 
-cd Tripwire
+cd tripwire
 
 git submodule init && git submodule update
 

@@ -266,7 +266,17 @@ class Tripwire
             array_flip(array_intersect_key($this->listing_now, $this->listing_last))
         );
 
-        $this->there_were_differences = count($this->files_new) || count($this->files_modified) || count($this->files_deleted);
+        // this line must have parenthesis
+        $this->there_were_differences = (count($this->files_new) OR count($this->files_modified) OR count($this->files_deleted));
+
+        if($this->DEBUG) {
+            echo 'Number of files_new: ' . count($this->files_new) . "\n";
+            echo 'Number of files_modified: ' . count($this->files_modified) . "\n";
+            echo 'Number of files_delete: ' . count($this->files_deleted). "\n";
+
+            echo ($this->there_were_differences ? 'There were differences' : 'There were not any differences') . "\n";
+            print_r($this->files_modified);
+        }
     }
 
 
@@ -283,6 +293,10 @@ class Tripwire
         // || there were differences
         if (empty($this->listing_last) || $this->there_were_differences)
         {
+            if ($this->DEBUG) {
+                echo "Saving MD5 file \n";
+            }
+
             // json encode is slightly faster than serialize since it 
             // doesn't have to insert string lengths
             file_put_contents($this->config['md5_file'], json_encode($this->listing_now));
@@ -318,7 +332,7 @@ class Tripwire
         if (empty($this->listing_last))
         {
             // First Run
-            $this->add_message('There was no previous listings - this was a first run.');
+            $this->add_message('There were no previous listings - this was a first run.');
 
             $vars['total'] = count($this->files_new);
             $vars['title'] = 'Tripwire - First Run';
@@ -326,7 +340,7 @@ class Tripwire
         }
         elseif ($this->there_were_differences)
         {
-            $this->add_message('There was a previous listing and there are differences.');
+            $this->add_message('There were previous listings and there are differences.');
 
             // Changes Detected
 
@@ -349,7 +363,7 @@ class Tripwire
         require_once 'include/twig/lib/Twig/Autoloader.php';
         Twig_Autoloader::register();
 
-        $loader = new Twig_Loader_Filesystem( dirname(__FILE__) . '/views' );
+        $loader = new Twig_Loader_Filesystem('views');
         $twig = new Twig_Environment($loader);
 
         $template = $twig->loadTemplate('email_template.html');
@@ -361,6 +375,10 @@ class Tripwire
         if ($this->DEBUG)
         {
             echo $body;
+            echo "\n\n";
+            echo "Message Buffer:";
+            echo "\n\n";
+            print_r($this->messages_buffer);
         }
 
     }
